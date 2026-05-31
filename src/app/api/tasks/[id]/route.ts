@@ -29,7 +29,6 @@ export async function PATCH(
   const body = await req.json();
   const { is_completed } = body;
 
-  // Pastikan todo ini milik user yang login
   const { data: existing } = await supabaseAdmin
     .from('tasks')
     .select('user_id')
@@ -51,7 +50,6 @@ export async function PATCH(
   return NextResponse.json(data);
 }
 
-// DELETE /api/todos/[id] — hapus todo
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -61,7 +59,6 @@ export async function DELETE(
 
   const { id } = await params;
 
-  // Pastikan todo ini milik user yang login
   const { data: existing } = await supabaseAdmin
     .from('tasks')
     .select('user_id')
