@@ -1,176 +1,34 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { supabase } from '../../../lib/supabase';
-
-interface Tasks {
-  id: number;
-  user_id?: string;
-  title: string;
-  description?: string | null;
-  priority: number;
-  deadline?: string | null;
-  status?: string | null;
-  is_completed?: boolean;
-}
-
-const priorityLabel: Record<number, { text: string; color: string }> = {
-  1: { text: 'Rendah',  color: 'text-green-500' },
-  2: { text: 'Sedang',  color: 'text-yellow-500' },
-  3: { text: 'Tinggi',  color: 'text-red-500' },
-};
+// Ambil logika dari file sebelah
+import { useTasks, priorityLabel } from './useTasks'; 
 
 export default function TodosPage() {
-  const router = useRouter();
-  const [todos, setTodos] = useState<Tasks[]>([]);
-  const [userName, setUserName] = useState<string>('');
-  
-  // State form
-  const [taskTitle, setTaskTitle] = useState('');
-  const [taskDescription, setTaskDescription] = useState('');
-  const [taskPriority, setTaskPriority] = useState<number>(1);
-  const [deadline, setDeadline] = useState('');
-  const [status, setStatus] = useState('pending');
-  
-  const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState<string | null>(null);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session) {
-        router.replace('/login');
-        return;
-      }
-      setToken(session.access_token);
-
-      const { data: userData } = await supabase
-        .from('users')
-        .select('name')
-        .eq('id', session.user.id)
-        .single();
-
-      if (userData) setUserName(userData.name);
-      fetchTasks(session.access_token);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (session) setToken(session.access_token);
-        else router.replace('/login');
-      }
-    );
-
-    return () => subscription.unsubscribe();
-  }, [router]);
-
-  const fetchTasks = async (accessToken: string) => {
-    setLoading(true);
-    const res = await fetch('/api/tasks', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      setTodos(data);
-    } else {
-      const errorData = await res.json();
-      console.error('Error fetching tasks detail:', errorData);
-      alert(`Gagal memuat tugas: ${errorData.error || 'Terjadi kesalahan'}`);
-    }
-    setLoading(false);
-  };
-
-  const addTasks = async () => {
-    if (!taskTitle.trim() || !token) return;
-
-    const res = await fetch('/api/tasks', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        title: taskTitle,
-        description: taskDescription,
-        priority: taskPriority,
-        deadline: deadline ? deadline : null, // Kirim null jika kosong
-        status: status,
-      }),
-    });
-
-    if (res.ok) {
-      const newTask = await res.json();
-      setTodos([newTask, ...todos]);
-      // Reset form
-      setTaskTitle('');
-      setTaskDescription('');
-      setTaskPriority(1);
-      setDeadline('');
-      setStatus('pending');
-    } else {
-      console.error('Error adding task');
-    }
-  };
-
-  const toggleTask = async (id: number, currentStatus: boolean) => {
-    const res = await fetch(`/api/tasks/${id}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      // Mengubah is_completed dan otomatis mengubah status jika diperlukan
-      body: JSON.stringify({ 
-        is_completed: !currentStatus,
-        status: !currentStatus ? 'completed' : 'pending'
-      }),
-    });
-
-    if (res.ok) {
-      setTodos(todos.map(t => 
-        t.id === id 
-          ? { ...t, is_completed: !currentStatus, status: !currentStatus ? 'completed' : 'pending' } 
-          : t
-      ));
-    }
-  };
-
-  const deleteTask = async (id: number) => {
-    const res = await fetch(`/api/tasks/${id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (res.ok) {
-      setTodos(todos.filter(t => t.id !== id));
-    }
-  };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.replace('/login');
-  };
+  // Panggil hook-nya di sini
+  const {
+    todos, userName, loading,
+    taskTitle, setTaskTitle,
+    taskDescription, setTaskDescription,
+    taskPriority, setTaskPriority,
+    deadline, setDeadline,
+    status, setStatus,
+    addTasks, toggleTask, deleteTask, handleLogout
+  } = useTasks();
 
   return (
     <main className="min-h-screen bg-gray-100 py-10 px-5">
       <div className="max-w-lg mx-auto bg-white rounded-lg shadow-md p-6">
-
-        {/* Header */}
+        
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-800">Pencatat Tugas</h1>
             {userName && <p className="text-sm text-gray-500">Halo, {userName}!</p>}
           </div>
-          <button
-            onClick={handleLogout}
-            className="text-sm text-red-500 hover:text-red-700 font-medium"
-          >
+          <button onClick={handleLogout} className="text-sm text-red-500 hover:text-red-700 font-medium">
             Keluar
           </button>
         </div>
 
-        {/* Form Tambah Tugas */}
         <div className="flex flex-col gap-3 mb-6 bg-gray-50 p-4 rounded-lg border">
           <input
             type="text"
@@ -219,7 +77,7 @@ export default function TodosPage() {
             <label className="text-xs text-gray-600 font-medium mb-1">Tenggat Waktu (Deadline)</label>
             <div className="flex gap-3">
               <input
-                type="datetime-local" // <-- UBAH KE DATETIME-LOCAL
+                type="datetime-local"
                 className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black text-sm"
                 value={deadline}
                 onChange={(e) => setDeadline(e.target.value)}
@@ -234,7 +92,6 @@ export default function TodosPage() {
           </div>
         </div>
 
-        {/* List Tugas */}
         {loading ? (
           <p className="text-center text-gray-400 text-sm">Memuat tugas...</p>
         ) : (
@@ -273,7 +130,6 @@ export default function TodosPage() {
 
                         {todo.deadline && (
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${new Date(todo.deadline) < new Date() && !todo.is_completed ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-600'}`}>
-                            {/* UBAH KE toLocaleString AGAR JAM MUNCUL */}
                             📅 {new Date(todo.deadline).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                           </span>
                         )}

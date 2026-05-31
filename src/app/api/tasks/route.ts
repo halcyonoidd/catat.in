@@ -2,6 +2,42 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../lib/supabase-admin';
 import { createClient } from '@supabase/supabase-js';
 
+// --- LOGIKA SORTING CUSTOM ---
+interface Task {
+  id: number;
+  priority: number;
+  deadline?: string | null;
+  created_at: string;
+  [key: string]: any;
+}
+
+const sortTasksLogic = (tasksList: Task[]) => {
+  return [...tasksList].sort((a, b) => {
+    // 1. Cek Prioritas (Descending: 3 -> 2 -> 1)
+    if (b.priority !== a.priority) return b.priority - a.priority;
+    
+    // 2. Jika prioritas sama, cek Deadline
+    const hasDeadlineA = !!a.deadline;
+    const hasDeadlineB = !!b.deadline;
+
+    if (hasDeadlineA && hasDeadlineB) {
+      const dateDeadlineA = new Date(a.deadline as string).getTime();
+      const dateDeadlineB = new Date(b.deadline as string).getTime();
+      if (dateDeadlineA !== dateDeadlineB) return dateDeadlineA - dateDeadlineB;
+    } else if (hasDeadlineA && !hasDeadlineB) {
+      return -1; // A punya deadline, letakkan di atas
+    } else if (!hasDeadlineA && hasDeadlineB) {
+      return 1;  // B punya deadline, letakkan di atas
+    }
+    
+    // 3. Jika prioritas dan deadline sama, berdasarkan waktu pembuatan
+    const dateCreatedA = new Date(a.created_at || '').getTime();
+    const dateCreatedB = new Date(b.created_at || '').getTime();
+    return dateCreatedA - dateCreatedB;
+  });
+};
+// ------------------------------
+
 async function getUserFromRequest(req: NextRequest) {
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) return null;
@@ -27,12 +63,14 @@ export async function GET(req: NextRequest) {
   const { data, error } = await supabaseAdmin
     .from('tasks')
     .select('*')
-    .eq('user_id', user.id)
-    // UBAH: dari 'urgency' menjadi 'priority'
-    .order('priority', { ascending: false });
+    .eq('user_id', user.id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
+
+  // Eksekusi logika sorting sebelum dikirim ke frontend
+  const sortedData = sortTasksLogic(data);
+
+  return NextResponse.json(sortedData);
 }
 
 export async function POST(req: NextRequest) {
@@ -42,7 +80,6 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  // UBAH: Tangkap priority, deadline, dan status dari frontend
   const { title, description, priority, deadline, status } = body;
 
   if (!title?.trim()) {
@@ -55,9 +92,9 @@ export async function POST(req: NextRequest) {
       user_id: user.id,
       title,
       description: description ?? null,
-      priority: priority ?? 1, // UBAH: dari urgency ke priority
-      deadline: deadline ?? null, // TAMBAH: agar input tanggal masuk ke db
-      status: status ?? 'pending', // TAMBAH: status tugas
+      priority: priority ?? 1, 
+      deadline: deadline ?? null, 
+      status: status ?? 'pending', 
       is_completed: false,
     }])
     .select()
