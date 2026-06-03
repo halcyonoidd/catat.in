@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../lib/supabase-admin';
 import { createClient } from '@supabase/supabase-js';
 
-// --- LOGIKA SORTING CUSTOM ---
 interface Task {
   id: number;
   priority: number;
@@ -13,10 +12,8 @@ interface Task {
 
 const sortTasksLogic = (tasksList: Task[]) => {
   return [...tasksList].sort((a, b) => {
-    // 1. Cek Prioritas (Descending: 3 -> 2 -> 1)
     if (b.priority !== a.priority) return b.priority - a.priority;
     
-    // 2. Jika prioritas sama, cek Deadline
     const hasDeadlineA = !!a.deadline;
     const hasDeadlineB = !!b.deadline;
 
@@ -25,18 +22,17 @@ const sortTasksLogic = (tasksList: Task[]) => {
       const dateDeadlineB = new Date(b.deadline as string).getTime();
       if (dateDeadlineA !== dateDeadlineB) return dateDeadlineA - dateDeadlineB;
     } else if (hasDeadlineA && !hasDeadlineB) {
-      return -1; // A punya deadline, letakkan di atas
+      return -1; 
     } else if (!hasDeadlineA && hasDeadlineB) {
-      return 1;  // B punya deadline, letakkan di atas
+      return 1; 
     }
     
-    // 3. Jika prioritas dan deadline sama, berdasarkan waktu pembuatan
     const dateCreatedA = new Date(a.created_at || '').getTime();
     const dateCreatedB = new Date(b.created_at || '').getTime();
     return dateCreatedA - dateCreatedB;
   });
 };
-// ------------------------------
+
 
 async function getUserFromRequest(req: NextRequest) {
   const authHeader = req.headers.get('Authorization');
@@ -67,7 +63,6 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Eksekusi logika sorting sebelum dikirim ke frontend
   const sortedData = sortTasksLogic(data);
 
   return NextResponse.json(sortedData);

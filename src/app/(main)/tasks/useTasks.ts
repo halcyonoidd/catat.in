@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../../lib/supabase';
 
-// Tipe data untuk Frontend
 export interface Tasks {
   id: number;
   user_id?: string;
@@ -21,20 +20,29 @@ export const priorityLabel: Record<number, { text: string; color: string }> = {
   3: { text: 'Tinggi',  color: 'text-red-500' },
 };
 
-// INI ADALAH LOGIKA HALAMANMU (Custom Hook)
 export function useTasks() {
   const router = useRouter();
   const [todos, setTodos] = useState<Tasks[]>([]);
   const [userName, setUserName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState<string | null>(null);
+  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
 
-  // State form UI
+
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDescription, setTaskDescription] = useState('');
   const [taskPriority, setTaskPriority] = useState<number>(1);
   const [deadline, setDeadline] = useState('');
   const [status, setStatus] = useState('pending');
+
+  const resetForm = () => {
+    setTaskTitle('');
+    setTaskDescription('');
+    setTaskPriority(1);
+    setDeadline('');
+    setStatus('pending');
+    setEditingTaskId(null);
+  };
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -80,8 +88,9 @@ export function useTasks() {
   const addTasks = async () => {
     if (!taskTitle.trim() || !token) return;
 
-    const res = await fetch('/api/tasks', {
-      method: 'POST',
+    const isEditing = editingTaskId !== null;
+    const res = await fetch(isEditing ? `/api/tasks/${editingTaskId}` : '/api/tasks', {
+      method: isEditing ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
         title: taskTitle,
@@ -94,12 +103,21 @@ export function useTasks() {
 
     if (res.ok) {
       await fetchTasks(token);
-      setTaskTitle('');
-      setTaskDescription('');
-      setTaskPriority(1);
-      setDeadline('');
-      setStatus('pending');
+      resetForm();
     }
+  };
+
+  const startEditTask = (task: Tasks) => {
+    setTaskTitle(task.title);
+    setTaskDescription(task.description ?? '');
+    setTaskPriority(task.priority ?? 1);
+    setDeadline(task.deadline ? task.deadline.slice(0, 16) : '');
+    setStatus(task.status ?? 'pending');
+    setEditingTaskId(task.id);
+  };
+
+  const cancelEditTask = () => {
+    resetForm();
   };
 
   const toggleTask = async (id: number, currentStatus: boolean) => {
@@ -110,6 +128,19 @@ export function useTasks() {
         is_completed: !currentStatus,
         status: !currentStatus ? 'completed' : 'pending'
       }),
+    });
+
+    if (res.ok && token) {
+      await fetchTasks(token);
+    }
+  };
+
+
+  const updateTask = async (id: number, updatedFields: Partial<Tasks>) => {
+    const res = await fetch(`/api/tasks/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(updatedFields),
     });
 
     if (res.ok && token) {
@@ -141,6 +172,7 @@ export function useTasks() {
     taskPriority, setTaskPriority,
     deadline, setDeadline,
     status, setStatus,
-    addTasks, toggleTask, deleteTask, handleLogout
+    editingTaskId,
+    addTasks, toggleTask, deleteTask, handleLogout, updateTask, startEditTask, cancelEditTask
   };
 }

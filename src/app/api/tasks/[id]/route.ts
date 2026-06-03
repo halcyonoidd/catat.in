@@ -17,7 +17,6 @@ async function getUserFromRequest(req: NextRequest) {
   return user;
 }
 
-// PATCH /api/todos/[id] — toggle is_completed
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -27,7 +26,35 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json();
-  const { is_completed } = body;
+  const allowedUpdates: Record<string, unknown> = {};
+
+  if (typeof body.title === 'string') {
+    const title = body.title.trim();
+    if (!title) {
+      return NextResponse.json({ error: 'Judul tidak boleh kosong' }, { status: 400 });
+    }
+    allowedUpdates.title = title;
+  }
+
+  if (typeof body.description === 'string') {
+    allowedUpdates.description = body.description;
+  }
+
+  if (body.priority !== undefined) {
+    allowedUpdates.priority = Number(body.priority);
+  }
+
+  if (body.deadline !== undefined) {
+    allowedUpdates.deadline = body.deadline;
+  }
+
+  if (typeof body.status === 'string') {
+    allowedUpdates.status = body.status;
+  }
+
+  if (body.is_completed !== undefined) {
+    allowedUpdates.is_completed = body.is_completed;
+  }
 
   const { data: existing } = await supabaseAdmin
     .from('tasks')
@@ -41,7 +68,7 @@ export async function PATCH(
 
   const { data, error } = await supabaseAdmin
     .from('tasks')
-    .update({ is_completed })
+    .update(allowedUpdates)
     .eq('id', id)
     .select()
     .single();
